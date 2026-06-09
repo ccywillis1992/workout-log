@@ -391,7 +391,7 @@ export default function App() {
         <header id="app_header" className="flex flex-col md:flex-row justify-between items-center gap-6 pb-6 border-b-4 border-zinc-900">
           <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left w-full md:w-auto">
             <img 
-              src="/icon.png" 
+              src="./icon.png?v=2" 
               alt="Cartoon Usagi Bench Press" 
               referrerPolicy="no-referrer"
               className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border border-lime-400 p-1 bg-zinc-900 shadow-xl object-contain"
