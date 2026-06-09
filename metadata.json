@@ -1,0 +1,6 @@
+{
+  "name": "Workout Tracker",
+  "description": "A clean tracking app for gym beginners to log daily sets, reps, body weight, and track workout consistency with line charts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
