@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>STRENGTH.LOG - Pristine Gym Tracker</title>
+    <!-- Trailing slash redirect for PWA subfolder installations (e.g. GitHub Pages) -->
+    <script>
+      (function() {
+        const path = window.location.pathname;
+        if (!path.endsWith('/') && !path.split('/').pop().includes('.')) {
+          window.location.replace(path + '/' + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
     <!-- PWA Settings -->
     <link rel="manifest" href="./manifest.json?v=2" />
     <meta name="theme-color" content="#a3e635" />
