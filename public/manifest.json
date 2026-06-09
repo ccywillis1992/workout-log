@@ -4,13 +4,13 @@
   "description": "Pristine daily workout sets, reps and resting time intensity logs powered by offline local storage.",
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "icon.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
     }
   ],
-  "start_url": "/",
+  "start_url": "./",
   "background_color": "#09090b",
   "theme_color": "#a3e635",
   "display": "standalone",

@@ -44,7 +44,7 @@ export default function App() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs');
-  const [showDocumentation, setShowDocumentation] = useState<boolean>(true);
+  const [showDocumentation, setShowDocumentation] = useState<boolean>(false);
   const [timeRange, setTimeRange] = useState<number>(14);
 
   // Calendar state
@@ -450,82 +450,14 @@ export default function App() {
           </div>
         </header>
 
-        {/* SYSTEM SPECIFICATION: PRD ACCORDION */}
-        {showDocumentation && (
-          <section id="system_doc_accordion" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl transition-all duration-300">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-lime-400" />
-                <h2 className="font-display text-lg font-black uppercase tracking-widest text-white">
-                  Data Architecture & PRD Plan Spec
-                </h2>
-              </div>
-              <button 
-                onClick={() => setShowDocumentation(false)}
-                className="text-[10px] uppercase tracking-widest font-bold bg-zinc-800 text-zinc-300 px-3 py-1.5 hover:bg-lime-400 hover:text-black transition cursor-pointer"
-              >
-                Collapse Info
-              </button>
-            </div>
-            
-            <div className="p-1 grid grid-cols-1 md:grid-cols-2 gap-8 text-sm pt-6">
-              <div className="space-y-3">
-                <h3 className="font-display font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span className="text-lime-400">01 //</span> Client-Side Data Architecture
-                </h3>
-                <p className="text-zinc-400 leading-relaxed text-xs">
-                  The application is engineered on a decoupled, type-safe schema leveraging React state and durable <code className="text-mono text-lime-400 bg-zinc-950 px-1.5 py-0.5 rounded font-bold font-mono">localStorage</code> persistence, fully eliminating server-side vulnerability for personal gym logs.
-                </p>
-                <ul className="space-y-1.5 text-xs text-zinc-400 pl-4 list-disc font-mono">
-                  <li><strong>Schema:</strong> Modeled within a relational array <code className="text-lime-400">DailyLog[]</code> using <code className="text-lime-400">YYYY-MM-DD</code> strings as index.</li>
-                  <li><strong>Modularity:</strong> Features isolated sub-nodes for each exercise session containing names, muscle targeting, and set metrics.</li>
-                  <li><strong>Volume tracking:</strong> Aggregated calculations of Workout intensity mapped across chronological ranges.</li>
-                </ul>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="font-display font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span className="text-lime-400">02 //</span> Product Requirements (PRD) Goals
-                </h3>
-                <p className="text-zinc-400 leading-relaxed text-xs">
-                  This tracker removes analytical friction for gym beginners, prioritizing simple, streamlined steps that maximize physical consistency loop compliance.
-                </p>
-                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                  <div className="p-3 bg-zinc-950 border border-zinc-800">
-                    <span className="text-lime-400 block font-bold mb-1 uppercase tracking-wide">Streamlined Log</span>
-                    <p className="text-zinc-500 text-[11px] leading-relaxed">Fast suggestion prompts and dropdown entries bypass manual keyboard friction.</p>
-                  </div>
-                  <div className="p-3 bg-zinc-950 border border-zinc-800">
-                    <span className="text-white block font-bold mb-1 uppercase tracking-wide">Visual Metrics</span>
-                    <p className="text-zinc-500 text-[11px] leading-relaxed">Direct mapping of muscle volume calculations and progressive overload curves of target lift types.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Collapsed documentation prompt */}
-        {!showDocumentation && (
-          <div className="flex justify-start">
-            <button 
-              onClick={() => setShowDocumentation(true)}
-              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-lime-400 bg-zinc-900 border border-zinc-800 px-4 py-2 hover:border-lime-400 transition"
-            >
-              <Info className="w-3.5 h-3.5" />
-              <span>Show System Spec & PRD</span>
-            </button>
-          </div>
-        )}
-
         {/* CORE WORKSPACE GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div id="core_cols_wrapper" className="flex flex-col lg:grid lg:grid-cols-12 gap-8 items-start">
           
           {/* LEFT CONTAINER - CONSISTENCY CALENDAR & BODY METRIC SENSOR */}
-          <div className="lg:col-span-4 space-y-8">
+          <div className="contents lg:block lg:col-span-4 lg:space-y-8">
             
             {/* 1. DYNAMIC CONSISTENCY CALENDAR CARD */}
-            <div id="consistency_calendar" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl">
+            <div id="consistency_calendar" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl w-full order-3 lg:order-none">
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-800">
                 <div className="flex items-center gap-2">
                   <CalendarIcon className="w-5 h-5 text-lime-400" />
@@ -620,7 +552,7 @@ export default function App() {
             </div>
 
             {/* 2. BODY WEIGHT PROGRESS CARD & DAILY NOTES */}
-            <div id="body_weight_progress" className="bg-zinc-900 border-l-4 border-lime-400/60 p-6 shadow-xl space-y-4">
+            <div id="body_weight_progress" className="bg-zinc-900 border-l-4 border-lime-400/60 p-6 shadow-xl space-y-4 w-full order-4 lg:order-none">
               <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
                 <Scale className="w-5 h-5 text-lime-400" />
                 <h2 className="font-display font-extrabold uppercase text-white tracking-widest text-xs">Body Metrics</h2>
@@ -674,7 +606,7 @@ export default function App() {
 
             {/* LIVE REST TIME ALARM TIMER METRIC */}
             {activeTimerSeconds !== null && (
-              <div id="countdown_timer" className="bg-zinc-900 border-l-4 border-yellow-400 p-6 flex items-center justify-between shadow-xl">
+              <div id="countdown_timer" className="bg-zinc-900 border-l-4 border-yellow-400 p-6 flex items-center justify-between shadow-xl w-full order-1 lg:order-none">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-zinc-950 text-yellow-400 border border-zinc-800 animate-pulse">
                     <Clock className="w-5 h-5 animate-spin" />
@@ -698,10 +630,10 @@ export default function App() {
           </div>
 
           {/* RIGHT CONTAINER/MIDDLE - DAILY ACTIVITIES WORKLOG & LOG FORM */}
-          <div className="lg:col-span-8 space-y-8">
+          <div className="contents lg:block lg:col-span-8 lg:space-y-8">
             
             {/* PRIMARY BOX: SELECTED DATE ACTIVITIES AND ACCUMULATED WEIGHT VOLUMES */}
-            <div id="day_log_activities" className="bg-zinc-900 border-t-4 border-lime-400 p-6 shadow-xl space-y-6">
+            <div id="day_log_activities" className="bg-zinc-900 border-t-4 border-lime-400 p-6 shadow-xl space-y-6 w-full order-2 lg:order-none">
               <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 border-b border-zinc-800 pb-4">
                 <div>
                   <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest font-mono">ACTIVITY TRACKER</div>
@@ -805,7 +737,7 @@ export default function App() {
             </div>
 
             {/* SECONDARY BOX: LOG NEW ACTIVITY COMPOSER FORM */}
-            <div id="exercise_composer_form" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl">
+            <div id="exercise_composer_form" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl w-full order-1 lg:order-none">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-850">
                 <Plus className="w-5 h-5 text-lime-400" />
                 <h2 className="font-display font-black text-white uppercase tracking-widest text-sm">Log Movements</h2>
@@ -1016,7 +948,7 @@ export default function App() {
             </div>
 
             {/* ANALYTICS CHARTS */}
-            <div id="analytics_and_charts" className="bg-zinc-900 border border-zinc-805 p-6 shadow-xl space-y-6">
+            <div id="analytics_and_charts" className="bg-zinc-900 border border-zinc-805 p-6 shadow-xl space-y-6 w-full order-5 lg:order-none">
               
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-900 pb-4">
                 <div className="flex items-center gap-2">
@@ -1186,6 +1118,74 @@ export default function App() {
           </div>
 
         </div>
+
+        {/* SYSTEM SPECIFICATION: PRD ACCORDION AT BOTTOM */}
+        {showDocumentation && (
+          <section id="system_doc_accordion" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl transition-all duration-300 mt-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-lime-400" />
+                <h2 className="font-display text-lg font-black uppercase tracking-widest text-white">
+                  Data Architecture & PRD Plan Spec
+                </h2>
+              </div>
+              <button 
+                onClick={() => setShowDocumentation(false)}
+                className="text-[10px] uppercase tracking-widest font-bold bg-zinc-800 text-zinc-300 px-3 py-1.5 hover:bg-lime-400 hover:text-black transition cursor-pointer"
+              >
+                Collapse Info
+              </button>
+            </div>
+            
+            <div className="p-1 grid grid-cols-1 md:grid-cols-2 gap-8 text-sm pt-6">
+              <div className="space-y-3">
+                <h3 className="font-display font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span className="text-lime-400">01 //</span> Client-Side Data Architecture
+                </h3>
+                <p className="text-zinc-400 leading-relaxed text-xs">
+                  The application is engineered on a decoupled, type-safe schema leveraging React state and durable <code className="text-mono text-lime-400 bg-zinc-950 px-1.5 py-0.5 rounded font-bold font-mono">localStorage</code> persistence, fully eliminating server-side vulnerability for personal gym logs.
+                </p>
+                <ul className="space-y-1.5 text-xs text-zinc-400 pl-4 list-disc font-mono">
+                  <li><strong>Schema:</strong> Modeled within a relational array <code className="text-lime-400">DailyLog[]</code> using <code className="text-lime-400">YYYY-MM-DD</code> strings as index.</li>
+                  <li><strong>Modularity:</strong> Features isolated sub-nodes for each exercise session containing names, muscle targeting, and set metrics.</li>
+                  <li><strong>Volume tracking:</strong> Aggregated calculations of Workout intensity mapped across chronological ranges.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-display font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span className="text-lime-400">02 //</span> Product Requirements (PRD) Goals
+                </h3>
+                <p className="text-zinc-400 leading-relaxed text-xs">
+                  This tracker removes analytical friction for gym beginners, prioritizing simple, streamlined steps that maximize physical consistency loop compliance.
+                </p>
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                  <div className="p-3 bg-zinc-950 border border-zinc-800">
+                    <span className="text-lime-400 block font-bold mb-1 uppercase tracking-wide">Streamlined Log</span>
+                    <p className="text-zinc-500 text-[11px] leading-relaxed">Fast suggestion prompts and dropdown entries bypass manual keyboard friction.</p>
+                  </div>
+                  <div className="p-3 bg-zinc-950 border border-zinc-800">
+                    <span className="text-white block font-bold mb-1 uppercase tracking-wide">Visual Metrics</span>
+                    <p className="text-zinc-500 text-[11px] leading-relaxed">Direct mapping of muscle volume calculations and progressive overload curves of target lift types.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Collapsed documentation prompt */}
+        {!showDocumentation && (
+          <div className="flex justify-start mt-8">
+            <button 
+              onClick={() => setShowDocumentation(true)}
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-lime-400 bg-zinc-900 border border-zinc-800 px-4 py-2 hover:border-lime-400 transition cursor-pointer"
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>Show System Spec & PRD</span>
+            </button>
+          </div>
+        )}
 
         {/* Footer Decorative */}
         <footer className="mt-8 flex flex-col sm:flex-row justify-between items-center text-[10px] text-zinc-650 font-mono border-t border-zinc-900 pt-6 gap-2">
