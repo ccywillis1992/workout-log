@@ -27,13 +27,31 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Register Standard Service Worker -->
+    <!-- Register Standard Service Worker with Auto-Reload on Updates -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js?v=2')
+          navigator.serviceWorker.register('./service-worker.js?v=3')
             .then((reg) => {
               console.log('STRENGTH.LOG: ServiceWorker registered successfully on scope:', reg.scope);
+              
+              // Eagerly check for service worker updates on page view
+              reg.update();
+
+              // Auto-reload the tab if a new service worker completes installation
+              reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed') {
+                      if (navigator.serviceWorker.controller) {
+                        console.log('STRENGTH.LOG: New code compiled. Reloading page...');
+                        window.location.reload();
+                      }
+                    }
+                  };
+                }
+              };
             })
             .catch((err) => {
               console.warn('STRENGTH.LOG: ServiceWorker registration failed: ', err);

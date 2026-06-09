@@ -81,7 +81,12 @@ export default function App() {
     
     if (savedLogs) {
       try {
-        setLogs(JSON.parse(savedLogs));
+        const parsed = JSON.parse(savedLogs);
+        if (Array.isArray(parsed)) {
+          setLogs(parsed);
+        } else {
+          setLogs(generateInitialData());
+        }
       } catch (e) {
         setLogs(generateInitialData());
       }
