@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>STRENGTH.LOG - Pristine Gym Tracker</title>
     <!-- PWA Settings -->
-    <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#a3e635" />
-    <link rel="icon" type="image/png" href="icon.png" />
+    <link rel="icon" type="image/png" href="./icon.png" />
     
     <!-- iOS Web App Standalone Meta and Touch Icons -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STRENGTH.LOG" />
-    <link rel="apple-touch-icon" href="icon.png" />
+    <link rel="apple-touch-icon" href="./icon.png" />
   </head>
   <body>
     <div id="root"></div>
@@ -22,7 +22,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('service-worker.js')
+          navigator.serviceWorker.register('./service-worker.js')
             .then((reg) => {
               console.log('STRENGTH.LOG: ServiceWorker registered successfully on scope:', reg.scope);
             })

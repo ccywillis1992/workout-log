@@ -1,9 +1,9 @@
 const CACHE_NAME = "strength-log-cache-v1";
 const ASSETS = [
   "./",
-  "index.html",
-  "icon.png",
-  "manifest.json"
+  "./index.html",
+  "./icon.png",
+  "./manifest.json"
 ];
 
 self.addEventListener("install", (event) => {
