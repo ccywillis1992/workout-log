@@ -38,7 +38,7 @@ export function generateInitialData(): DailyLog[] {
   return [
     {
       date: getPastDate(14),
-      bodyWeight: 165.0,
+      bodyWeight: 75.0,
       notes: "First day at the gym! Felt amazing, albeit slightly sore later.",
       exercises: [
         {
@@ -64,7 +64,7 @@ export function generateInitialData(): DailyLog[] {
     },
     {
       date: getPastDate(12),
-      bodyWeight: 165.2,
+      bodyWeight: 75.2,
       notes: "Upper body focus. Focused on slow, controlled motions.",
       exercises: [
         {
@@ -90,7 +90,7 @@ export function generateInitialData(): DailyLog[] {
     },
     {
       date: getPastDate(10),
-      bodyWeight: 165.1,
+      bodyWeight: 75.1,
       notes: "Consistency is key. Squats feeling slightly smoother.",
       exercises: [
         {
@@ -116,7 +116,7 @@ export function generateInitialData(): DailyLog[] {
     },
     {
       date: getPastDate(8),
-      bodyWeight: 165.7,
+      bodyWeight: 75.4,
       notes: "First time trying Pull-ups. Needed resistance band helper, but great pump!",
       exercises: [
         {
@@ -143,7 +143,7 @@ export function generateInitialData(): DailyLog[] {
     },
     {
       date: getPastDate(6),
-      bodyWeight: 165.8,
+      bodyWeight: 75.5,
       notes: "Leg day again. Moving up in weight on squats, form felt very solid.",
       exercises: [
         {
@@ -169,7 +169,7 @@ export function generateInitialData(): DailyLog[] {
     },
     {
       date: getPastDate(4),
-      bodyWeight: 166.1,
+      bodyWeight: 75.8,
       notes: "Overhead press feels lighter! Increased weight slightly.",
       exercises: [
         {
@@ -195,7 +195,7 @@ export function generateInitialData(): DailyLog[] {
     },
     {
       date: getPastDate(2),
-      bodyWeight: 166.4,
+      bodyWeight: 76.0,
       notes: "Pushed raw chest volume today. Felt highly intense and very rewarding.",
       exercises: [
         {

@@ -16,7 +16,8 @@ import {
   ClipboardList,
   Flame,
   Scale,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -43,7 +44,7 @@ export default function App() {
   // 1. Core State
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs');
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg');
   const [showDocumentation, setShowDocumentation] = useState<boolean>(false);
   const [timeRange, setTimeRange] = useState<number>(14);
 
@@ -94,9 +95,8 @@ export default function App() {
       setLogs(generateInitialData());
     }
 
-    if (savedUnit === 'lbs' || savedUnit === 'kg') {
-      setWeightUnit(savedUnit as WeightUnit);
-    }
+    setWeightUnit('kg');
+    localStorage.setItem('workout_tracker_unit', 'kg');
   }, []);
 
   // Sync state to localStorage
@@ -108,6 +108,86 @@ export default function App() {
   const handleUnitToggle = (unit: WeightUnit) => {
     setWeightUnit(unit);
     localStorage.setItem('workout_tracker_unit', unit);
+  };
+
+  // 1.5 Export Training Logs as Excel-compatible CSV
+  const handleExportToExcel = () => {
+    const headers = [
+      "Date",
+      "Body Weight (kg)",
+      "Daily Notes",
+      "Exercise Name",
+      "Muscle Group",
+      "Set Number",
+      "Weight (kg)",
+      "Reps",
+      "Rest Time (seconds)",
+      "Estimated 1RM (kg)"
+    ];
+
+    const csvRows = [headers.join(",")];
+    const sortedLogs = [...logs].sort((a, b) => a.date.localeCompare(b.date));
+
+    sortedLogs.forEach(day => {
+      const dateStr = day.date;
+      const bodyWt = day.bodyWeight !== undefined ? day.bodyWeight : "";
+      const escapedNotes = day.notes ? day.notes.replace(/"/g, '""') : "";
+
+      if (day.exercises.length === 0) {
+        const row = [
+          dateStr,
+          bodyWt,
+          `"${escapedNotes}"`,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ];
+        csvRows.push(row.join(","));
+      } else {
+        day.exercises.forEach(ex => {
+          const exNameEscaped = ex.exerciseName.replace(/"/g, '""');
+          const category = ex.category;
+
+          ex.sets.forEach(set => {
+            let est1RM = "";
+            if (set.reps > 0) {
+              est1RM = set.reps === 1 
+                ? set.weight.toFixed(1)
+                : (set.weight * (1 + set.reps / 30)).toFixed(1);
+            }
+
+            const row = [
+              dateStr,
+              bodyWt,
+              `"${escapedNotes}"`,
+              `"${exNameEscaped}"`,
+              `"${category}"`,
+              set.setNumber,
+              set.weight,
+              set.reps,
+              set.restTimeSeconds,
+              est1RM
+            ];
+            csvRows.push(row.join(","));
+          });
+        });
+      }
+    });
+
+    const csvString = csvRows.join("\r\n");
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `STRENGTH_LOG_EXPORT_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // 2. Derive Current Selected Date's DailyLog
@@ -404,6 +484,7 @@ export default function App() {
             <div>
               <h1 className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tighter leading-none uppercase text-white font-display">
                 STRENGTH<span className="text-lime-400">.LOG</span>
+                <span className="inline-block text-[10px] bg-zinc-900 border border-zinc-800 text-lime-400 font-mono font-bold px-2 py-[3px] rounded ml-2 sm:ml-4 uppercase tracking-wider align-middle">v2.5 Update</span>
               </h1>
               <p className="text-zinc-400 text-xs sm:text-sm uppercase tracking-widest font-bold mt-2">
                 Pristine Daily Sets, Reps & Resting Time Intensity
@@ -424,19 +505,8 @@ export default function App() {
 
             {/* PREFERRED UNIT TOGGLE & BACKUP TOOLS */}
             <div id="unit_controls" className="flex items-center gap-3 mt-3 justify-start md:justify-end select-none">
-              <div className="flex bg-zinc-900 p-1 border border-zinc-800 text-xs font-bold font-mono">
-                <button 
-                  onClick={() => handleUnitToggle('lbs')}
-                  className={`px-3 py-1 cursor-pointer transition-all ${weightUnit === 'lbs' ? 'bg-lime-400 text-black font-black' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  LBS
-                </button>
-                <button 
-                  onClick={() => handleUnitToggle('kg')}
-                  className={`px-3 py-1 cursor-pointer transition-all ${weightUnit === 'kg' ? 'bg-lime-400 text-black font-black' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  KG
-                </button>
+              <div className="bg-zinc-900 px-3 py-1.5 border border-zinc-800 text-[11px] font-black font-mono text-lime-400 uppercase tracking-widest select-none">
+                UNIT: KG
               </div>
 
               <button 
@@ -606,6 +676,28 @@ export default function App() {
                     className="w-full bg-zinc-950 border border-zinc-800 focus:border-lime-400 focus:ring-1 focus:ring-lime-400 text-white rounded-xs p-2.5 text-xs outline-none transition font-mono"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* 3. EXPORT TRAINING JOURNAL (DESKTOP: BELOW METRICS, MOBILE: BOTTOM) */}
+            <div id="export_data_center" className="bg-zinc-900 border-l-4 border-lime-400/50 p-6 shadow-xl space-y-4 w-full order-6 lg:order-none">
+              <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
+                <Download className="w-5 h-5 text-lime-400" />
+                <h2 className="font-display font-extrabold uppercase text-white tracking-widest text-xs">Export Workspace</h2>
+              </div>
+
+              <p className="text-xs text-zinc-400 leading-relaxed font-mono">
+                Back up your entire historical training journal to a spreadsheet, compatible natively with Google Sheets and Excel in kilogram logs.
+              </p>
+
+              <div>
+                <button 
+                  onClick={handleExportToExcel}
+                  className="w-full bg-lime-400 text-black hover:bg-white hover:text-black font-black uppercase text-xs py-2.5 px-4 transition font-mono tracking-widest flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] border border-transparent"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export to Google Sheets</span>
+                </button>
               </div>
             </div>
 

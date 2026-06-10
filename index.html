@@ -29,9 +29,34 @@
     <script type="module" src="/src/main.tsx"></script>
     <!-- Register Standard Service Worker with Auto-Reload on Updates -->
     <script>
+      // Force clean reload for v2.5 update to instantly bypass any old PWA service worker cache
+      (function() {
+        if (localStorage.getItem('strength_log_version_key_2_5') !== 'active_v2_5') {
+          console.log('STRENGTH.LOG: Purging stale Service Workers and offline caches to fetch latest modifications...');
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              for (var i = 0; i < regs.length; i++) {
+                regs[i].unregister();
+              }
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              for (var i = 0; i < names.length; i++) {
+                caches.delete(names[i]);
+              }
+            });
+          }
+          localStorage.setItem('strength_log_version_key_2_5', 'active_v2_5');
+          setTimeout(function() {
+            window.location.reload();
+          }, 300);
+        }
+      })();
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js?v=3')
+          navigator.serviceWorker.register('./service-worker.js?v=4')
             .then((reg) => {
               console.log('STRENGTH.LOG: ServiceWorker registered successfully on scope:', reg.scope);
               
