@@ -4,6 +4,10 @@ export interface SetLog {
   weight: number; // in preferred unit (kg or lbs)
   reps: number;
   restTimeSeconds: number; // Rest time after this set
+  isDoubleVolume?: boolean; // toggle to double volume (for dumbbell work, etc.)
+  minutes?: number; // for Cardio
+  pace?: string; // e.g. "5:30/km" or "6.5 mph"
+  inclineAngle?: number; // incline degree/percent
 }
 
 export interface ExerciseLog {
