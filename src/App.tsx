@@ -50,6 +50,40 @@ export default function App() {
   const [showDocumentation, setShowDocumentation] = useState<boolean>(false);
   const [timeRange, setTimeRange] = useState<number>(14);
 
+  // Toast Alert State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Action confirmation states
+  const [resetConfirm, setResetConfirm] = useState<boolean>(false);
+  const [clearConfirm, setClearConfirm] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (resetConfirm) {
+      const timer = setTimeout(() => setResetConfirm(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [resetConfirm]);
+
+  useEffect(() => {
+    if (clearConfirm) {
+      const timer = setTimeout(() => setClearConfirm(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [clearConfirm]);
+
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
@@ -253,7 +287,7 @@ export default function App() {
     const file = e.dataTransfer.files?.[0];
     if (file) {
       if (!file.name.endsWith('.csv')) {
-        alert("Please upload a valid Excel-compatible .csv file.");
+        showToast("Please upload a valid Excel-compatible .csv file.", "error");
         return;
       }
       const reader = new FileReader();
@@ -313,7 +347,7 @@ export default function App() {
   const handleImportCSV = (csvText: string) => {
     const parsed = parseCSV(csvText);
     if (parsed.length < 2) {
-      alert("Invalid CSV format or empty file.");
+      showToast("Invalid CSV format or empty file.", "error");
       return;
     }
     
@@ -335,7 +369,7 @@ export default function App() {
     const cardioInclineIdx = headers.indexOf("cardio incline angle");
 
     if (dateIdx === -1) {
-      alert("Required 'Date' column not found in CSV.");
+      showToast("Required 'Date' column not found in CSV.", "error");
       return;
     }
 
@@ -426,7 +460,7 @@ export default function App() {
 
     const updatedList = Array.from(tempLogsMap.values());
     saveLogsToStorage(updatedList);
-    alert("History CSV records successfully imported and merged!");
+    showToast("History CSV records successfully imported and merged!", "success");
   };
 
   // Committed set editing action triggers
@@ -578,7 +612,7 @@ export default function App() {
     }
 
     saveLogsToStorage(updatedLogs);
-    alert("Session health metrics and recovery notes saved!");
+    showToast("Session health metrics and recovery notes saved!", "success");
   };
 
   // Submit complete exercise to active log
@@ -654,17 +688,25 @@ export default function App() {
   };
 
   const handleResetSeedData = () => {
-    if (window.confirm("Are you sure you want to restore the helpful beginner sample data? Any current tracking changes will be kept or merged.")) {
-      saveLogsToStorage(generateInitialData());
+    if (!resetConfirm) {
+      setResetConfirm(true);
+      return;
     }
+    saveLogsToStorage(generateInitialData());
+    setResetConfirm(false);
+    showToast("Helpful beginner sample data restored successfully!", "success");
   };
 
   const handleClearAllData = () => {
-    if (window.confirm("Wipe all tracking logs? This will clean up your local storage completely.")) {
-      saveLogsToStorage([]);
-      setBodyWeightInput('');
-      setNotesInput('');
+    if (!clearConfirm) {
+      setClearConfirm(true);
+      return;
     }
+    saveLogsToStorage([]);
+    setBodyWeightInput('');
+    setNotesInput('');
+    setClearConfirm(false);
+    showToast("All tracking logs wiped successfully!", "info");
   };
 
   // Rest Timer Logic
@@ -777,7 +819,22 @@ export default function App() {
   }, [dateRangeList, logs]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans p-4 sm:p-6 lg:p-8 relative">
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            id="toast-notification"
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-zinc-900 border-l-4 border-lime-400 text-white px-5 py-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] border border-zinc-800 rounded font-mono text-xs max-w-md w-[calc(100%-2rem)]"
+          >
+            <div className={`w-2 h-2 rounded-full shrink-0 ${toast.type === 'error' ? 'bg-red-500 animate-pulse' : toast.type === 'success' ? 'bg-lime-500 animate-ping' : 'bg-lime-400 animate-pulse'}`} />
+            <div className="flex-1 font-bold">{toast.message}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Container wrapper limiting maximum width for modern visual spacing */}
       <div id="app_container" className="max-w-7xl mx-auto space-y-8 animate-[fadeIn_0.5s_ease-out]">
         
@@ -820,82 +877,29 @@ export default function App() {
 
               <button 
                 onClick={handleResetSeedData}
-                className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white border border-zinc-805 text-[10px] font-bold font-mono uppercase transition cursor-pointer"
+                className={`px-2.5 py-1.5 transition duration-200 text-[10px] font-bold font-mono uppercase cursor-pointer border ${
+                  resetConfirm 
+                    ? "bg-amber-950/40 text-amber-400 border-amber-500/80 animate-pulse" 
+                    : "bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white border-zinc-805"
+                }`}
               >
-                Reset Demo
+                {resetConfirm ? "Confirm resetting?" : "Reset Demo"}
               </button>
               <button 
                 onClick={handleClearAllData}
-                className="px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/20 text-red-400 border border-zinc-855 text-[10px] font-bold font-mono uppercase transition cursor-pointer"
+                className={`px-2.5 py-1.5 transition duration-200 text-[10px] font-bold font-mono uppercase cursor-pointer border ${
+                  clearConfirm 
+                    ? "bg-red-950 text-red-400 border-red-500/80 animate-pulse animate-duration-500" 
+                    : "bg-zinc-900 hover:bg-red-950/20 text-red-400 border-zinc-855"
+                }`}
               >
-                Clear Logs
+                {clearConfirm ? "Confirm Wiping?" : "Clear Logs"}
               </button>
             </div>
           </div>
         </header>
 
-        {/* QUICK ACCESS FEATURE & DATA NAVIGATION BAR */}
-        <div id="quick_access_features_bar" className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-900 border-l-4 border-lime-400 p-5 shadow-xl font-mono text-xs">
-          
-          {/* FEATURE 1: EXTREMELY VISIBLE QUICK IMPORT PORTAL */}
-          <div className="space-y-2.5">
-            <div className="flex items-center gap-2">
-              <Upload className="w-4 h-4 text-lime-400 animate-bounce" />
-              <h3 className="font-display font-extrabold uppercase text-white tracking-wider text-xs">Quick Data CSV Import</h3>
-            </div>
-            <p className="text-zinc-400 leading-relaxed text-[11px]">
-              Instantly load or merge any of your historical workout spreadsheets (.csv) right into your active strength journal logs!
-            </p>
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button 
-                onClick={() => {
-                  const inputEl = document.getElementById('csv-file-upload');
-                  if (inputEl) {
-                    (inputEl as HTMLInputElement).click();
-                  } else {
-                    alert("Uploader database target is loading. Please drag and drop or upload via the footer Control section.");
-                  }
-                }}
-                className="bg-lime-400 text-black hover:bg-white hover:text-black transition-all font-black uppercase text-xs px-4 py-2.5 flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(163,230,53,0.2)] rounded-xs"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>📂 CLICK TO CHOOSE & IMPORT CSV</span>
-              </button>
-              <button
-                onClick={() => {
-                  const el = document.getElementById('export_data_center');
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
-                  }
-                }}
-                className="text-[10px] text-zinc-400 hover:text-white uppercase font-bold underline decoration-lime-400/50 underline-offset-4 transition cursor-pointer"
-              >
-                View Expected CSV Format spec
-              </button>
-            </div>
-          </div>
 
-          {/* FEATURE 2: 2X FACTOR EXPLAINER HUB */}
-          <div className="space-y-2 border-t md:border-t-0 md:border-l border-zinc-805/80 pt-3 md:pt-0 md:pl-5">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-lime-400 animate-ping"></span>
-              <h3 className="font-display font-extrabold uppercase text-white tracking-wider text-xs">Where is the 2X Factor Button?</h3>
-            </div>
-            <p className="text-zinc-400 leading-relaxed text-[11px]">
-              Dumbbell and single-limb exercises should use the <span className="text-lime-400 font-extrabold bg-lime-400/5 px-1 py-0.5 border border-lime-400/20 rounded">2X FACTOR</span> switch to automatically double calculated volume (for left + right limbs).
-            </p>
-            <div className="text-[10px] text-zinc-400 space-y-1 bg-zinc-950/40 p-2 border border-zinc-850/60 rounded-xs">
-              <div className="flex items-start gap-1.5">
-                <span className="text-lime-400 font-bold">1.</span>
-                <span>In the <strong>"Log Movements"</strong> creator form (scroll below), click the <strong className="text-zinc-350">"1X NORMAL"</strong> toggle element on any set to change it to <strong className="text-lime-400 font-black">"2X FACTOR ON"</strong>.</span>
-              </div>
-              <div className="flex items-start gap-1.5 pt-0.5">
-                <span className="text-lime-400 font-bold">2.</span>
-                <span>Or, click <strong>"Edit"</strong> on any already logged set inside the active <strong>"Training Log"</strong> list to toggle the 2X Factor.</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* CORE WORKSPACE GRID */}
         <div id="core_cols_wrapper" className="flex flex-col lg:grid lg:grid-cols-12 gap-8 items-start">
@@ -1526,17 +1530,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {selectedCategory !== 'Cardio' && (
-                    <div className="bg-lime-400/5 border border-lime-400/20 p-3 text-[10px] text-zinc-400 font-mono leading-relaxed rounded-xs space-y-1">
-                      <div className="text-lime-400 font-black uppercase tracking-wider flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-lime-400 rounded-full animate-pulse"></span>
-                        <span>Dumbbells & Unilateral Tip (2X Factor)</span>
-                      </div>
-                      <p>
-                        Toggle the <span className="text-white bg-lime-400/10 px-1 py-0.5 border border-lime-400/30 rounded font-black">2X FACTOR ON</span> button on any set to double its calculated volume (perfect for dumbbells, single-arm, or single-leg operations).
-                      </p>
-                    </div>
-                  )}
+
 
                   {/* Header labels */}
                   {selectedCategory === 'Cardio' ? (

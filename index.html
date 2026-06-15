@@ -29,8 +29,36 @@
     <script type="module" src="/src/main.tsx"></script>
     <!-- Register Standard Service Worker with Auto-Reload on Updates -->
     <script>
-      // Force clean reload for v2.5 update to instantly bypass any old PWA service worker cache
       (function() {
+        const isDev = window.location.hostname.includes('ais-dev') || 
+                      window.location.hostname.includes('localhost') || 
+                      window.location.hostname.includes('127.0.0.1');
+
+        if (isDev) {
+          console.log('STRENGTH.LOG: Dev environment detected. Forcing Service Worker unregistration and custom cache purge to refresh preview...');
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              for (var i = 0; i < regs.length; i++) {
+                regs[i].unregister().then(function(unregistered) {
+                  if (unregistered) {
+                    console.log('STRENGTH.LOG: Purged stale dev Service Worker successfully');
+                  }
+                });
+              }
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              for (var i = 0; i < names.length; i++) {
+                caches.delete(names[i]);
+              }
+            });
+          }
+          // Do not proceed to register SW in dev mode
+          return;
+        }
+
+        // Force clean reload for v2.5 update in production/preview environments
         if (localStorage.getItem('strength_log_version_key_2_5') !== 'active_v2_5') {
           console.log('STRENGTH.LOG: Purging stale Service Workers and offline caches to fetch latest modifications...');
           if ('serviceWorker' in navigator) {
@@ -52,37 +80,37 @@
             window.location.reload();
           }, 300);
         }
-      })();
 
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js?v=4')
-            .then((reg) => {
-              console.log('STRENGTH.LOG: ServiceWorker registered successfully on scope:', reg.scope);
-              
-              // Eagerly check for service worker updates on page view
-              reg.update();
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js?v=4')
+              .then((reg) => {
+                console.log('STRENGTH.LOG: ServiceWorker registered successfully on scope:', reg.scope);
+                
+                // Eagerly check for service worker updates on page view
+                reg.update();
 
-              // Auto-reload the tab if a new service worker completes installation
-              reg.onupdatefound = () => {
-                const installingWorker = reg.installing;
-                if (installingWorker) {
-                  installingWorker.onstatechange = () => {
-                    if (installingWorker.state === 'installed') {
-                      if (navigator.serviceWorker.controller) {
-                        console.log('STRENGTH.LOG: New code compiled. Reloading page...');
-                        window.location.reload();
+                // Auto-reload the tab if a new service worker completes installation
+                reg.onupdatefound = () => {
+                  const installingWorker = reg.installing;
+                  if (installingWorker) {
+                    installingWorker.onstatechange = () => {
+                      if (installingWorker.state === 'installed') {
+                        if (navigator.serviceWorker.controller) {
+                          console.log('STRENGTH.LOG: New code compiled. Reloading page...');
+                          window.location.reload();
+                        }
                       }
-                    }
-                  };
-                }
-              };
-            })
-            .catch((err) => {
-              console.warn('STRENGTH.LOG: ServiceWorker registration failed: ', err);
-            });
-        });
-      }
+                    };
+                  }
+                };
+              })
+              .catch((err) => {
+                console.warn('STRENGTH.LOG: ServiceWorker registration failed: ', err);
+              });
+          });
+        }
+      })();
     </script>
   </body>
 </html>
