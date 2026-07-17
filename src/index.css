@@ -7,6 +7,10 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+html, body {
+  background-color: #09090b; /* matches zinc-950 */
+}
+
 /* Custom visual refinements for clean inputs and scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
