@@ -19,7 +19,9 @@ import {
   FileText,
   Download,
   Upload,
-  Database
+  Database,
+  Pencil,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -91,6 +93,14 @@ export default function App() {
   const [exerciseInput, setExerciseInput] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Chest');
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [exerciseSuggestions, setExerciseSuggestions] = useState<{ name: string; category: string }[]>(EXERCISE_SUGGESTIONS);
+  const [globalDoubleVolume, setGlobalDoubleVolume] = useState<boolean>(false);
+
+  const handleGlobalDoubleVolumeToggle = () => {
+    const nextVal = !globalDoubleVolume;
+    setGlobalDoubleVolume(nextVal);
+    setDraftSets(draftSets.map(set => ({ ...set, isDoubleVolume: nextVal })));
+  };
   
   // Committed set editing state
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
@@ -133,25 +143,74 @@ export default function App() {
     setSelectedDate(todayStr);
 
     const savedLogs = localStorage.getItem('workout_tracker_logs');
-    const savedUnit = localStorage.getItem('workout_tracker_unit');
+    let loadedLogs: DailyLog[] = [];
     
     if (savedLogs) {
       try {
         const parsed = JSON.parse(savedLogs);
         if (Array.isArray(parsed)) {
+          loadedLogs = parsed;
           setLogs(parsed);
         } else {
-          setLogs(generateInitialData());
+          loadedLogs = generateInitialData();
+          setLogs(loadedLogs);
         }
       } catch (e) {
-        setLogs(generateInitialData());
+        loadedLogs = generateInitialData();
+        setLogs(loadedLogs);
       }
     } else {
-      setLogs(generateInitialData());
+      loadedLogs = generateInitialData();
+      setLogs(loadedLogs);
     }
 
     setWeightUnit('kg');
     localStorage.setItem('workout_tracker_unit', 'kg');
+
+    // Populate customized suggestions list
+    const savedCustomSuggestions = localStorage.getItem('workout_tracker_custom_suggestions');
+    let baseSuggestions = EXERCISE_SUGGESTIONS;
+    if (savedCustomSuggestions) {
+      try {
+        const parsed = JSON.parse(savedCustomSuggestions);
+        if (Array.isArray(parsed)) {
+          baseSuggestions = parsed;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    
+    // Scrape loaded logs for any missing exercise names to fully synthesize suggestion banks
+    const scanned: { name: string; category: string }[] = [];
+    const scannedKeys = new Set<string>();
+    
+    baseSuggestions.forEach(item => {
+      const key = `${item.name.toLowerCase()}||${item.category}`;
+      if (!scannedKeys.has(key)) {
+        scannedKeys.add(key);
+        scanned.push(item);
+      }
+    });
+
+    if (Array.isArray(loadedLogs)) {
+      loadedLogs.forEach((log: DailyLog) => {
+        if (log.exercises) {
+          log.exercises.forEach(ex => {
+            const name = ex.exerciseName;
+            const category = ex.category;
+            const key = `${name.toLowerCase()}||${category}`;
+            if (!scannedKeys.has(key)) {
+              scannedKeys.add(key);
+              scanned.push({ name, category });
+            }
+          });
+        }
+      });
+    }
+
+    setExerciseSuggestions(scanned);
+    localStorage.setItem('workout_tracker_custom_suggestions', JSON.stringify(scanned));
   }, []);
 
   // Sync state to localStorage
@@ -524,10 +583,10 @@ export default function App() {
   // Suggestions filtered by what's typed
   const filteredSuggestions = useMemo(() => {
     if (!exerciseInput) return [];
-    return EXERCISE_SUGGESTIONS.filter(item => 
+    return exerciseSuggestions.filter(item => 
       item.name.toLowerCase().includes(exerciseInput.toLowerCase())
     ).slice(0, 5);
-  }, [exerciseInput]);
+  }, [exerciseInput, exerciseSuggestions]);
 
   // 3. Calendar helper functions
   const daysInMonth = useMemo(() => {
@@ -571,8 +630,8 @@ export default function App() {
   };
 
   const addDraftSet = () => {
-    const lastSet = draftSets[draftSets.length - 1] || { weight: 45, reps: 10, restTimeSeconds: 60, isDoubleVolume: false, minutes: 10, pace: '5:30/km', inclineAngle: 15 };
-    setDraftSets([...draftSets, { ...lastSet }]);
+    const lastSet = draftSets[draftSets.length - 1] || { weight: 45, reps: 10, restTimeSeconds: 60, isDoubleVolume: globalDoubleVolume, minutes: 10, pace: '5:30/km', inclineAngle: 15 };
+    setDraftSets([...draftSets, { ...lastSet, isDoubleVolume: globalDoubleVolume }]);
   };
 
   const removeDraftSet = (idx: number) => {
@@ -660,10 +719,75 @@ export default function App() {
 
     saveLogsToStorage(updatedLogs);
 
+    const trimmedExName = exerciseInput.trim();
+    if (trimmedExName) {
+      setExerciseSuggestions(prev => {
+        const exists = prev.some(
+          item => item.name.toLowerCase() === trimmedExName.toLowerCase() && item.category === selectedCategory
+        );
+        if (!exists) {
+          const updated = [...prev, { name: trimmedExName, category: selectedCategory }];
+          localStorage.setItem('workout_tracker_custom_suggestions', JSON.stringify(updated));
+          return updated;
+        }
+        return prev;
+      });
+    }
+
     // Reset exercise form
     setExerciseInput('');
     setDraftSets([{ weight: 45, reps: 10, restTimeSeconds: 60, isDoubleVolume: false, minutes: 10, pace: '5:30/km', inclineAngle: 15 }]);
+    setGlobalDoubleVolume(false);
     setShowSuggestions(false);
+  };
+
+  const handleCopyMuscleGroupToToday = (muscleGroup: string, sourceDate: string) => {
+    const todayStr = formatDateString(new Date());
+    if (sourceDate === todayStr) {
+      showToast("Cannot copy to today because you are already viewing today's session.", "error");
+      return;
+    }
+
+    const sourceLog = logs.find(log => log.date === sourceDate);
+    if (!sourceLog) {
+      showToast("No source data found for this date.", "error");
+      return;
+    }
+
+    const exercisesToCopy = sourceLog.exercises.filter(ex => ex.category === muscleGroup);
+    if (exercisesToCopy.length === 0) {
+      showToast(`No exercises found for ${muscleGroup} on this date.`, "info");
+      return;
+    }
+
+    const copiedExercises: ExerciseLog[] = exercisesToCopy.map(ex => ({
+      ...ex,
+      id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      sets: ex.sets.map((set, sIdx) => ({
+        ...set,
+        id: `set-${Date.now()}-${sIdx}-${Math.random().toString(36).substr(2, 9)}`
+      }))
+    }));
+
+    let updatedLogs = [...logs];
+    let todayLogIndex = updatedLogs.findIndex(log => log.date === todayStr);
+
+    if (todayLogIndex >= 0) {
+      updatedLogs[todayLogIndex] = {
+        ...updatedLogs[todayLogIndex],
+        exercises: [...(updatedLogs[todayLogIndex].exercises || []), ...copiedExercises]
+      };
+    } else {
+      updatedLogs.push({
+        date: todayStr,
+        exercises: copiedExercises,
+        bodyWeight: undefined,
+        notes: ''
+      });
+    }
+
+    saveLogsToStorage(updatedLogs);
+    showToast(`Copied ${copiedExercises.length} ${muscleGroup} exercise(s) to Today (${todayStr})!`, "success");
   };
 
   const handleDeleteExercise = (exerciseId: string) => {
@@ -839,45 +963,69 @@ export default function App() {
       <div id="app_container" className="max-w-7xl mx-auto space-y-8 animate-[fadeIn_0.5s_ease-out]">
         
         {/* UPPER BRANDING HEADER WITH ACTIVE PWA USAGI LOGO */}
-        <header id="app_header" className="flex flex-col md:flex-row justify-between items-center gap-6 pb-6 border-b-4 border-zinc-900">
-          <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left w-full md:w-auto">
+        <header id="app_header" className="flex flex-col sm:flex-row justify-between items-center gap-4 pb-4 border-b-2 border-zinc-900">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             <img 
               src="./icon.png?v=2" 
               alt="Cartoon Usagi Bench Press" 
               referrerPolicy="no-referrer"
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border border-lime-400 p-1 bg-zinc-900 shadow-xl object-contain"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg border border-lime-400 p-0.5 bg-zinc-900 shadow-md object-contain shrink-0"
             />
             <div>
-              <h1 className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tighter leading-none uppercase text-white font-display">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-none uppercase text-white font-display">
                 STRENGTH<span className="text-lime-400">.LOG</span>
-                <span className="inline-block text-[10px] bg-zinc-900 border border-zinc-800 text-lime-400 font-mono font-bold px-2 py-[3px] rounded ml-2 sm:ml-4 uppercase tracking-wider align-middle">v2.5 Update</span>
+                <span className="inline-block text-[8px] bg-zinc-900 border border-zinc-800 text-lime-400 font-mono font-bold px-1 py-[1px] rounded ml-2 uppercase tracking-wider align-middle">v2.5</span>
               </h1>
-              <p className="text-zinc-400 text-xs sm:text-sm uppercase tracking-widest font-bold mt-2">
-                Pristine Daily Sets, Reps & Resting Time Intensity
-              </p>
             </div>
           </div>
-          <div className="text-left md:text-right w-full md:w-auto">
-            <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold font-mono">Selected Session</p>
-            <p className="text-2xl sm:text-3xl font-mono text-lime-400 font-extrabold uppercase">
-              {(() => {
-                const parts = selectedDate.split('-');
-                if (parts.length === 3) {
-                  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
-                }
-                return selectedDate;
-              })()}
-            </p>
+          <div className="flex flex-col sm:items-end w-full sm:w-auto gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
+              <div className="flex items-center gap-1.5">
+                <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold font-mono">Selected Session:</p>
+                <p className="text-sm font-mono text-lime-400 font-extrabold uppercase">
+                  {(() => {
+                    const parts = selectedDate.split('-');
+                    if (parts.length === 3) {
+                      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+                    }
+                    return selectedDate;
+                  })()}
+                </p>
+              </div>
+
+              {/* Body Weight input row next to the date */}
+              <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5">
+                <span className="text-zinc-500 text-[8px] uppercase tracking-wider font-bold font-mono">BW:</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="--"
+                  value={bodyWeightInput}
+                  onChange={(e) => setBodyWeightInput(e.target.value)}
+                  className="w-12 bg-transparent text-white text-[11px] font-black font-mono text-center outline-none"
+                  title="Body Weight"
+                />
+                <span className="text-zinc-500 text-[8px] font-bold font-mono uppercase">{weightUnit}</span>
+                <button
+                  type="button"
+                  onClick={handleSaveDayMeta}
+                  className="ml-1 bg-lime-400 hover:bg-white text-black font-black text-[8px] px-1 py-[2px] rounded-xs transition-colors cursor-pointer uppercase leading-none"
+                  title="Save body weight metrics"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
 
             {/* PREFERRED UNIT TOGGLE & BACKUP TOOLS */}
-            <div id="unit_controls" className="flex items-center gap-3 mt-3 justify-start md:justify-end select-none">
-              <div className="bg-zinc-900 px-3 py-1.5 border border-zinc-800 text-[11px] font-black font-mono text-lime-400 uppercase tracking-widest select-none">
-                UNIT: KG
+            <div id="unit_controls" className="flex items-center gap-2 select-none">
+              <div className="bg-zinc-900 px-2 py-1 border border-zinc-800 text-[9px] font-black font-mono text-lime-400 uppercase tracking-widest select-none">
+                KG
               </div>
 
               <button 
                 onClick={handleResetSeedData}
-                className={`px-2.5 py-1.5 transition duration-200 text-[10px] font-bold font-mono uppercase cursor-pointer border ${
+                className={`px-2 py-1 transition duration-200 text-[9px] font-bold font-mono uppercase cursor-pointer border ${
                   resetConfirm 
                     ? "bg-amber-950/40 text-amber-400 border-amber-500/80 animate-pulse" 
                     : "bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white border-zinc-805"
@@ -887,7 +1035,7 @@ export default function App() {
               </button>
               <button 
                 onClick={handleClearAllData}
-                className={`px-2.5 py-1.5 transition duration-200 text-[10px] font-bold font-mono uppercase cursor-pointer border ${
+                className={`px-2 py-1 transition duration-200 text-[9px] font-bold font-mono uppercase cursor-pointer border ${
                   clearConfirm 
                     ? "bg-red-950 text-red-400 border-red-500/80 animate-pulse animate-duration-500" 
                     : "bg-zinc-900 hover:bg-red-950/20 text-red-400 border-zinc-855"
@@ -1002,115 +1150,33 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2. BODY WEIGHT PROGRESS CARD & DAILY NOTES */}
-            <div id="body_weight_progress" className="bg-zinc-900 border-l-4 border-lime-400/60 p-6 shadow-xl space-y-4 w-full order-4 lg:order-none">
-              <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
-                <Scale className="w-5 h-5 text-lime-400" />
-                <h2 className="font-display font-extrabold uppercase text-white tracking-widest text-xs">Body Metrics</h2>
-              </div>
-
-              <p className="text-xs text-zinc-400 leading-relaxed font-mono">
-                Log diagnostic specs of body metrics on <span className="font-bold text-lime-400">{selectedDate}</span>.
-              </p>
-
-              <div className="space-y-4">
-                {/* Weight Input Box with selection scroll indicator */}
-                <div>
-                  <label className="block text-[10px] uppercase font-bold tracking-widest text-zinc-400 mb-1.5 font-mono" htmlFor="body_weight_input">
-                    BODYWEIGHT ({weightUnit.toUpperCase()})
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="body_weight_input"
-                      type="number"
-                      step="0.1"
-                      placeholder="e.g. 165.5"
-                      value={bodyWeightInput}
-                      onChange={(e) => setBodyWeightInput(e.target.value)}
-                      className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-lime-400 focus:ring-1 focus:ring-lime-400 text-white rounded-xs px-3 py-2 text-sm outline-none transition font-semibold font-mono"
-                    />
-                    <button
-                      onClick={handleSaveDayMeta}
-                      className="bg-lime-400 text-black font-black uppercase text-xs px-4 py-2 transition hover:bg-white cursor-pointer"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-
-                {/* Day Notes Input Box */}
-                <div>
-                  <label className="block text-[10px] uppercase font-bold tracking-widest text-zinc-400 mb-1.5 font-mono" htmlFor="day_notes_input">
-                    RECOVERY / DIET NOTES
-                  </label>
-                  <textarea
-                    id="day_notes_input"
-                    rows={2}
-                    placeholder="e.g., Squats felt lighter. Smashed high-protein meals."
-                    value={notesInput}
-                    onChange={(e) => setNotesInput(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-lime-400 focus:ring-1 focus:ring-lime-400 text-white rounded-xs p-2.5 text-xs outline-none transition font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* 3. EXPORT & IMPORT TRAINING JOURNAL (DATA CONTROL CENTER) */}
-            <div id="export_data_center" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl space-y-5 w-full order-6 lg:order-none">
-              <div className="flex items-center gap-2 pb-2 border-b border-zinc-800">
-                <Database className="w-5 h-5 text-lime-400" />
-                <h2 className="font-display font-extrabold uppercase text-white tracking-widest text-xs">Data Control Center</h2>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-bold text-lime-400 uppercase tracking-widest font-mono">1. Export Training History</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed font-mono">
-                  Download your entire historical training journal to an Excel/Google Sheets compatible spreadsheet.
-                </p>
+            <div id="export_data_center" className="bg-zinc-900 border-l-4 border-lime-400 p-4 shadow-xl w-full order-6 lg:order-none">
+              <div className="flex gap-2">
                 <button 
                   onClick={handleExportToExcel}
-                  className="w-full bg-lime-400 text-black hover:bg-white hover:text-black font-black uppercase text-xs py-2.5 px-4 transition font-mono tracking-widest flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] border border-transparent shadow-[0_0_15px_rgba(163,230,53,0.1)] hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                  className="flex-1 bg-lime-400 text-black hover:bg-white transition-all font-black uppercase text-[10px] py-2 px-3 font-mono tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Export to Google Sheets</span>
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export CSV</span>
                 </button>
-              </div>
-
-              <div className="border-t border-zinc-800 pt-3 space-y-2">
-                <h3 className="text-[10px] font-bold text-lime-400 uppercase tracking-widest font-mono">2. Import Old Records</h3>
-                <p className="text-xs text-zinc-400 leading-relaxed font-mono">
-                  Load or merge historical workout spreadsheets into your current training logs via a standard Excel CSV file.
-                </p>
-
-                {/* Drag-and-drop region with fallback click */}
-                <div 
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-sm p-4 text-center transition font-mono relative flex flex-col items-center justify-center min-h-[110px] ${
-                    isDragging 
-                      ? 'border-lime-400 bg-lime-400/10 text-lime-400' 
-                      : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700 text-zinc-450 hover:text-zinc-300'
-                  }`}
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById('csv-file-upload');
+                    if (el) (el as HTMLInputElement).click();
+                  }}
+                  className="flex-1 bg-zinc-950 border border-zinc-800 text-lime-400 hover:bg-zinc-800 hover:text-white transition-all font-black uppercase text-[10px] py-2 px-3 font-mono tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <input 
-                    type="file" 
-                    id="csv-file-upload" 
-                    accept=".csv" 
-                    onChange={handleFileChange} 
-                    className="sr-only" 
-                  />
-                  <label htmlFor="csv-file-upload" className="cursor-pointer w-full h-full block flex flex-col items-center justify-center">
-                    <Upload className="w-6 h-6 text-lime-400 mb-2 animate-bounce-slow" />
-                    <span className="text-[10px] font-black uppercase tracking-wider block">Drag & Drop CSV File</span>
-                    <span className="text-[8px] text-zinc-500 mt-1 block">Or click to select from your machine</span>
-                  </label>
-                </div>
-
-                <div className="text-[8px] text-zinc-500 font-mono leading-normal bg-zinc-950/40 p-2 border border-zinc-850/50">
-                  <span className="text-zinc-450 font-bold uppercase block mb-0.5 font-mono">💡 Expected Column Headers:</span>
-                  Date, Muscle Group, Exercise Name, Weight (kg), Reps, Rest Time (seconds), Is Double Volume, Cardio Minutes, Cardio Pace
-                </div>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Import CSV</span>
+                </button>
+                <input 
+                  type="file" 
+                  id="csv-file-upload" 
+                  accept=".csv" 
+                  onChange={handleFileChange} 
+                  className="sr-only" 
+                />
               </div>
             </div>
 
@@ -1143,31 +1209,30 @@ export default function App() {
           <div className="contents lg:block lg:col-span-8 lg:space-y-8">
             
             {/* PRIMARY BOX: SELECTED DATE ACTIVITIES AND ACCUMULATED WEIGHT VOLUMES */}
-            <div id="day_log_activities" className="bg-zinc-900 border-t-4 border-lime-400 p-6 shadow-xl space-y-6 w-full order-2 lg:order-none">
-              <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 border-b border-zinc-800 pb-4">
+            <div id="day_log_activities" className="bg-zinc-900 border-t-4 border-lime-400 p-4 sm:p-6 shadow-xl space-y-4 sm:space-y-6 w-full order-2 lg:order-none">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-3 gap-3">
                 <div>
-                  <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest font-mono">ACTIVITY TRACKER</div>
-                  <h2 className="font-display font-black text-white tracking-tighter text-3xl sm:text-4xl uppercase">
+                  <div className="text-zinc-500 text-[9px] font-bold uppercase tracking-widest font-mono">ACTIVITY TRACKER</div>
+                  <h2 className="font-display font-black text-white tracking-tighter text-2xl sm:text-3xl uppercase">
                     TRAINING LOG
                   </h2>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold bg-zinc-950 text-lime-400 px-3 py-2 border border-zinc-800 font-mono select-none">
-                    VOLUME: {activeDayLog ? activeDayLog.exercises.reduce((sum, ex) => {
+                <div className="flex flex-col text-right font-mono text-[11px] shrink-0 border-l border-zinc-800 pl-3">
+                  <div className="font-bold text-lime-400">
+                    VOL: <span className="text-white font-extrabold">{activeDayLog ? activeDayLog.exercises.reduce((sum, ex) => {
                       if (ex.category === 'Cardio') return sum;
                       return sum + ex.sets.reduce((es, s) => {
                         const mult = s.isDoubleVolume ? 2 : 1;
                         return es + (s.weight * s.reps * mult);
                       }, 0);
-                    }, 0).toLocaleString() : 0} {weightUnit.toUpperCase()}
-                  </span>
-                  
-                  {activeDayLog?.bodyWeight && (
-                    <span className="text-xs font-bold bg-zinc-950 text-white border border-zinc-800 px-3 py-2 font-mono select-none">
-                      BODYWEIGHT: {activeDayLog.bodyWeight} {weightUnit.toUpperCase()}
-                    </span>
-                  )}
+                    }, 0).toLocaleString() : 0}</span> {weightUnit.toUpperCase()}
+                  </div>
+                  {activeDayLog?.bodyWeight ? (
+                    <div className="text-[10px] text-zinc-400 mt-0.5">
+                      BW: <span className="text-white font-extrabold">{activeDayLog.bodyWeight}</span> {weightUnit.toUpperCase()}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -1181,19 +1246,34 @@ export default function App() {
                     {Object.entries(volumeByParts).map(([part, vol]) => {
                       const numericVol = vol as number;
                       const isSelectedPartUsed = numericVol > 0;
+                      const hasExercisesOnDay = activeDayLog?.exercises.some(ex => ex.category === part);
+                      const showCopyButton = selectedDate !== formatDateString(new Date()) && hasExercisesOnDay;
                       return (
                         <div 
                           key={part} 
-                          className={`p-2 flex flex-col font-mono text-[9px] border transition ${
+                          className={`p-2 flex flex-col justify-between font-mono text-[9px] border transition min-h-[50px] ${
                             isSelectedPartUsed 
                               ? 'border-lime-400/35 bg-lime-400/5 text-lime-400' 
                               : 'border-zinc-900 bg-zinc-900/10 text-zinc-600'
                           }`}
                         >
-                          <span className="font-bold uppercase tracking-wider block truncate text-[8px]">{part}</span>
-                          <span className="text-sm font-black text-white mt-0.5">
-                            {numericVol > 0 ? `${Number(numericVol.toFixed(1)).toLocaleString()}` : '0'} <span className="text-[8px] text-zinc-500">KG</span>
-                          </span>
+                          <div>
+                            <span className="font-bold uppercase tracking-wider block truncate text-[8px]">{part}</span>
+                            <span className="text-sm font-black text-white mt-0.5 block leading-none">
+                              {numericVol > 0 ? `${Number(numericVol.toFixed(1)).toLocaleString()}` : '0'} <span className="text-[7px] text-zinc-500">KG</span>
+                            </span>
+                          </div>
+                          {showCopyButton && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyMuscleGroupToToday(part, selectedDate)}
+                              className="mt-1.5 w-full bg-lime-400 hover:bg-white text-black font-black text-[7px] py-1 rounded-xs uppercase tracking-wider flex items-center justify-center gap-0.5 transition-all cursor-pointer shadow-sm"
+                              title={`Copy all ${part} exercises from this day to Today`}
+                            >
+                              <Copy className="w-2 h-2" />
+                              <span>Copy</span>
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -1325,12 +1405,12 @@ export default function App() {
                                               onChange={(e) => setEditSetRest(parseInt(e.target.value))}
                                               className="w-full bg-zinc-900 border border-zinc-800 text-white px-1 py-1 outline-none font-bold cursor-pointer text-[10px]"
                                             >
-                                              <option value={0}>NO REST</option>
-                                              <option value={30}>30s Rest</option>
-                                              <option value={60}>60s Rest</option>
-                                              <option value={90}>90s Rest</option>
-                                              <option value={120}>120s Rest</option>
-                                              <option value={180}>180s Rest</option>
+                                              <option value={0} className="bg-zinc-950 text-white font-mono">NO REST</option>
+                                              <option value={30} className="bg-zinc-950 text-white font-mono">30s Rest</option>
+                                              <option value={60} className="bg-zinc-950 text-white font-mono">60s Rest</option>
+                                              <option value={90} className="bg-zinc-950 text-white font-mono">90s Rest</option>
+                                              <option value={120} className="bg-zinc-950 text-white font-mono">120s Rest</option>
+                                              <option value={180} className="bg-zinc-950 text-white font-mono">180s Rest</option>
                                             </select>
                                           </div>
                                           <div>
@@ -1416,9 +1496,10 @@ export default function App() {
                                       <button
                                         type="button"
                                         onClick={() => startEditingSet(set)}
-                                        className="text-[9px] text-zinc-450 hover:text-lime-400 uppercase font-black tracking-widest pl-1 transition cursor-pointer"
+                                        className="text-zinc-500 hover:text-lime-400 p-1.5 transition cursor-pointer"
+                                        title="Edit Set"
                                       >
-                                        Edit
+                                        <Pencil className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
                                   </div>
@@ -1441,14 +1522,6 @@ export default function App() {
                   </div>
                 )}
               </div>
-
-              {/* SHOW GENERAL DAY NOTES IF PRESENT */}
-              {activeDayLog?.notes && (
-                <div className="bg-zinc-950 border border-zinc-800 p-4 text-xs leading-relaxed">
-                  <span className="font-mono text-[9px] uppercase tracking-widest font-black text-lime-400 block mb-1">Reflection //</span>
-                  <p className="text-zinc-300 font-mono italic">"{activeDayLog.notes}"</p>
-                </div>
-              )}
 
             </div>
 
@@ -1502,18 +1575,32 @@ export default function App() {
 
                   <div>
                     <label className="block text-[10px] uppercase mb-1.5 text-zinc-400 font-mono font-bold tracking-widest" htmlFor="category_select">
-                      MUSCLE TARGET GROUP
+                      MUSCLE TARGET GROUP & MULTIPLIER
                     </label>
-                    <select
-                      id="category_select"
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-lime-400 focus:ring-1 focus:ring-lime-400 text-white p-3 font-bold uppercase text-xs sm:text-sm outline-none transition cursor-pointer"
-                    >
-                      {CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat} className="bg-zinc-950">{cat.toUpperCase()}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <select
+                        id="category_select"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-lime-400 focus:ring-1 focus:ring-lime-400 text-white p-3 font-bold uppercase text-xs sm:text-sm outline-none transition cursor-pointer"
+                      >
+                        {CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat} className="bg-zinc-950">{cat.toUpperCase()}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleGlobalDoubleVolumeToggle}
+                        className={`px-4 font-mono font-black text-xs uppercase tracking-wider border transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+                          globalDoubleVolume 
+                            ? 'bg-lime-400 text-black border-lime-400 font-extrabold shadow-sm' 
+                            : 'bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                        }`}
+                        title="Toggle 2X Volume Factor for ALL sets in this exercise"
+                      >
+                        2X
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1532,190 +1619,136 @@ export default function App() {
 
 
 
-                  {/* Header labels */}
-                  {selectedCategory === 'Cardio' ? (
-                    <div className="hidden sm:grid sm:grid-cols-12 gap-3 pb-1 border-b border-zinc-900 text-[9px] font-bold text-zinc-500 font-mono tracking-widest uppercase">
-                      <span className="col-span-2 text-center">ROUND</span>
-                      <span className="col-span-3">DURATION (MINS)</span>
-                      <span className="col-span-3">PACE (e.g. 5:30/km)</span>
-                      <span className="col-span-3">INCLINE ANGLE (%)</span>
-                      <span className="col-span-1"></span>
-                    </div>
-                  ) : (
-                    <div className="hidden sm:grid sm:grid-cols-12 gap-3 pb-1 border-b border-zinc-900 text-[9px] font-bold text-zinc-500 font-mono tracking-widest uppercase">
-                      <span className="col-span-2 text-center">SET NO.</span>
-                      <span className="col-span-3">WEIGHT ({weightUnit.toUpperCase()})</span>
-                      <span className="col-span-2">REPS</span>
-                      <span className="col-span-2">REST TIMER</span>
-                      <span className="col-span-2">X2 VOLUME</span>
-                      <span className="col-span-1"></span>
-                    </div>
-                  )}
-
                   {/* Dynamic set list container elements */}
-                  <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                     {draftSets.map((set, index) => (
-                      <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3 items-center bg-zinc-950 p-3 sm:p-0 sm:bg-transparent border border-zinc-850 sm:border-0 font-mono text-xs">
-                        {/* Set count index */}
-                        <div className="col-span-1 sm:col-span-2 flex justify-between sm:justify-center items-center font-mono text-xs font-bold text-zinc-500">
-                          <span className="sm:hidden uppercase tracking-wider text-[8px] font-mono font-bold text-zinc-450 text-[9px]">
-                            {selectedCategory === 'Cardio' ? 'Round:' : 'Set:'}
-                          </span>
-                          <span className="bg-zinc-855 text-lime-400 px-2.5 py-1 rounded-sm font-bold font-mono">0{index + 1}</span>
-                        </div>
+                      <div key={index} className="flex items-center gap-1.5 py-1.5 border-b border-zinc-800/50 font-mono text-xs">
+                        {/* Set/Round Index label */}
+                        <span className="text-[10px] text-zinc-500 font-bold shrink-0 min-w-[24px] text-center">
+                          {selectedCategory === 'Cardio' ? `R${index + 1}` : `S${index + 1}`}
+                        </span>
 
                         {selectedCategory === 'Cardio' ? (
                           <>
-                            {/* Minutes Duration */}
-                            <div className="col-span-3 font-mono">
-                              <div className="flex items-center gap-1 bg-zinc-950 p-1 border border-zinc-800">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="999"
-                                  required
-                                  placeholder="Minutes"
-                                  value={set.minutes !== undefined ? set.minutes : ''}
-                                  onChange={(e) => updateDraftSet(index, 'minutes', parseFloat(e.target.value) || 0)}
-                                  className="w-full bg-transparent text-white font-mono text-center text-sm font-black outline-none border-none py-1"
-                                />
-                              </div>
+                            {/* Duration Minutes */}
+                            <div className="flex-1 min-w-[55px] bg-zinc-950 border border-zinc-800 rounded-sm">
+                              <input
+                                type="number"
+                                min="0"
+                                max="999"
+                                required
+                                placeholder="Mins"
+                                value={set.minutes !== undefined ? set.minutes : ''}
+                                onChange={(e) => updateDraftSet(index, 'minutes', parseFloat(e.target.value) || 0)}
+                                className="w-full bg-transparent text-white font-mono text-center text-xs font-bold outline-none py-1.5 px-1"
+                              />
                             </div>
 
                             {/* Pace */}
-                            <div className="col-span-3 font-mono">
-                              <div className="flex items-center bg-zinc-950 p-1 border border-zinc-800">
-                                <input
-                                  type="text"
-                                  placeholder="e.g. 5:30/km"
-                                  value={set.pace || ''}
-                                  onChange={(e) => updateDraftSet(index, 'pace', e.target.value)}
-                                  className="w-full bg-transparent text-white font-mono text-center text-xs font-black outline-none border-none py-1.5"
-                                />
-                              </div>
+                            <div className="flex-1 min-w-[75px] bg-zinc-950 border border-zinc-800 rounded-sm">
+                              <input
+                                type="text"
+                                placeholder="Pace"
+                                value={set.pace || ''}
+                                onChange={(e) => updateDraftSet(index, 'pace', e.target.value)}
+                                className="w-full bg-transparent text-white font-mono text-center text-xs font-bold outline-none py-1.5 px-1"
+                              />
                             </div>
 
-                            {/* Incline Angle */}
-                            <div className="col-span-3 font-mono">
-                              <div className="flex items-center bg-zinc-950 p-1 border border-zinc-800">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="45"
-                                  step="0.5"
-                                  placeholder="Incline %"
-                                  value={set.inclineAngle !== undefined ? set.inclineAngle : ''}
-                                  onChange={(e) => updateDraftSet(index, 'inclineAngle', parseFloat(e.target.value) || 0)}
-                                  className="w-full bg-transparent text-white font-mono text-center text-sm font-black outline-none border-none py-1"
-                                />
-                              </div>
+                            {/* Incline */}
+                            <div className="flex-1 min-w-[55px] bg-zinc-950 border border-zinc-800 rounded-sm">
+                              <input
+                                type="number"
+                                min="0"
+                                max="45"
+                                step="0.5"
+                                placeholder="Incline%"
+                                value={set.inclineAngle !== undefined ? set.inclineAngle : ''}
+                                onChange={(e) => updateDraftSet(index, 'inclineAngle', parseFloat(e.target.value) || 0)}
+                                className="w-full bg-transparent text-white font-mono text-center text-xs font-bold outline-none py-1.5 px-1"
+                              />
                             </div>
                           </>
                         ) : (
                           <>
-                            {/* Weight selection input spinner */}
-                            <div className="col-span-3 font-mono">
-                              <span className="sm:hidden text-[9px] text-zinc-500 font-bold block mb-1 uppercase tracking-wider">Weight ({weightUnit.toUpperCase()})</span>
-                              <div className="flex items-center gap-1 bg-zinc-950 p-1 border border-zinc-800">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="999"
-                                  step="0.1"
-                                  required
-                                  placeholder="Weight"
-                                  value={set.weight !== undefined && set.weight !== null ? set.weight : ''}
-                                  onChange={(e) => updateDraftSet(index, 'weight', e.target.value)}
-                                  className="w-full bg-transparent text-white font-mono text-center text-sm font-black outline-none border-none py-1"
-                                />
-                                {/* Fast adjust modifiers for ease of use */}
+                            {/* Weight selection input */}
+                            <div className="flex-1 min-w-[70px] flex items-center bg-zinc-950 border border-zinc-800 rounded-sm px-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max="999"
+                                step="0.1"
+                                required
+                                placeholder={`Wt (${weightUnit})`}
+                                value={set.weight !== undefined && set.weight !== null ? set.weight : ''}
+                                onChange={(e) => updateDraftSet(index, 'weight', e.target.value)}
+                                className="w-full bg-transparent text-white font-mono text-center text-xs font-bold outline-none py-1"
+                              />
+                              <div className="flex flex-col gap-[1px] shrink-0">
                                 <button
                                   type="button"
-                                  onClick={() => updateDraftSet(index, 'weight', Math.max(0, parseFloat((parseFloat(String(set.weight || 0)) - 5).toFixed(1))))}
-                                  className="px-2 py-1 text-[10px] bg-zinc-900 font-bold hover:bg-zinc-800 text-zinc-300 rounded-sm cursor-pointer"
+                                  onClick={() => updateDraftSet(index, 'weight', parseFloat((parseFloat(String(set.weight || 0)) + 2.5).toFixed(1)))}
+                                  className="text-[7px] leading-none bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-bold px-1 py-0.5 rounded-xs"
                                 >
-                                  -5
+                                  +
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateDraftSet(index, 'weight', parseFloat((parseFloat(String(set.weight || 0)) + 5).toFixed(1)))}
-                                  className="px-2 py-1 text-[10px] bg-zinc-900 font-bold hover:bg-zinc-800 text-zinc-300 rounded-sm cursor-pointer"
+                                  onClick={() => updateDraftSet(index, 'weight', Math.max(0, parseFloat((parseFloat(String(set.weight || 0)) - 2.5).toFixed(1))))}
+                                  className="text-[7px] leading-none bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-bold px-1 py-0.5 rounded-xs"
                                 >
-                                  +5
+                                  -
                                 </button>
                               </div>
                             </div>
 
                             {/* Reps */}
-                            <div className="col-span-2 font-mono">
-                              <span className="sm:hidden text-[9px] text-zinc-500 font-bold block mb-1 uppercase tracking-wider">Reps Count</span>
-                              <div className="flex items-center gap-1 bg-zinc-950 p-1 border border-zinc-800">
-                                <select
-                                  value={set.reps}
-                                  onChange={(e) => updateDraftSet(index, 'reps', parseInt(e.target.value))}
-                                  className="w-full bg-transparent text-white font-mono text-xs font-black outline-none border-none cursor-pointer py-1"
-                                >
-                                  {Array.from({ length: 40 }, (_, i) => i + 1).map((num) => (
-                                    <option key={num} value={num} className="bg-zinc-950 text-white font-mono">{num} REPS</option>
-                                  ))}
-                                </select>
-                              </div>
+                            <div className="shrink-0 w-16 bg-zinc-950 border border-zinc-800 rounded-sm">
+                              <select
+                                value={set.reps}
+                                onChange={(e) => updateDraftSet(index, 'reps', parseInt(e.target.value))}
+                                className="w-full bg-transparent text-white font-mono text-center text-xs font-bold outline-none cursor-pointer py-1.5"
+                              >
+                                {Array.from({ length: 40 }, (_, i) => i + 1).map((num) => (
+                                  <option key={num} value={num} className="bg-zinc-950 text-white font-mono">{num} reps</option>
+                                ))}
+                              </select>
                             </div>
 
                             {/* Rest */}
-                            <div className="col-span-2 font-mono">
-                              <span className="sm:hidden text-[9px] text-zinc-500 font-bold block mb-1 uppercase tracking-wider">Rest Duration</span>
-                              <div className="bg-zinc-950 px-1 py-1 border border-zinc-800 font-mono">
-                                <select
-                                  value={set.restTimeSeconds}
-                                  onChange={(e) => updateDraftSet(index, 'restTimeSeconds', parseInt(e.target.value))}
-                                  className="w-full bg-zinc-900 text-white font-mono text-[11px] font-black outline-none border-none cursor-pointer"
-                                >
-                                  <option value={0} className="bg-zinc-900 text-white animate-none">NO REST</option>
-                                  <option value={15} className="bg-zinc-900 text-white animate-none">15s</option>
-                                  <option value={30} className="bg-zinc-900 text-white animate-none">30s</option>
-                                  <option value={45} className="bg-zinc-900 text-white animate-none">45s</option>
-                                  <option value={60} className="bg-zinc-900 text-white animate-none">60s (1m)</option>
-                                  <option value={90} className="bg-zinc-900 text-white animate-none">90s (1.5m)</option>
-                                  <option value={120} className="bg-zinc-900 text-white animate-none">120s (2m)</option>
-                                  <option value={180} className="bg-zinc-900 text-white animate-none">180s (3m)</option>
-                                </select>
-                              </div>
+                            <div className="shrink-0 w-16 bg-zinc-950 border border-zinc-800 rounded-sm">
+                              <select
+                                value={set.restTimeSeconds}
+                                onChange={(e) => updateDraftSet(index, 'restTimeSeconds', parseInt(e.target.value))}
+                                className="w-full bg-transparent text-white font-mono text-center text-[10px] font-bold outline-none cursor-pointer py-1.5"
+                              >
+                                <option value={0} className="bg-zinc-950 text-white font-mono">no rest</option>
+                                <option value={15} className="bg-zinc-950 text-white font-mono">15s</option>
+                                <option value={30} className="bg-zinc-950 text-white font-mono">30s</option>
+                                <option value={45} className="bg-zinc-950 text-white font-mono">45s</option>
+                                <option value={60} className="bg-zinc-950 text-white font-mono">1m</option>
+                                <option value={90} className="bg-zinc-950 text-white font-mono">1.5m</option>
+                                <option value={120} className="bg-zinc-950 text-white font-mono">2m</option>
+                                <option value={180} className="bg-zinc-950 text-white font-mono">3m</option>
+                              </select>
                             </div>
 
-                            {/* x2 Volume multiplier checkbox button */}
-                            <div className="col-span-2 font-mono">
-                              <span className="sm:hidden text-[9px] text-zinc-500 font-bold block mb-1 uppercase tracking-wider">2x Factor (Dumbbells)</span>
-                              <button
-                                type="button"
-                                onClick={() => updateDraftSet(index, 'isDoubleVolume', !set.isDoubleVolume)}
-                                className={`w-full py-1.5 px-1 text-[10px] sm:text-[9px] font-black uppercase tracking-wider transition font-mono border rounded-sm flex items-center justify-center gap-1 cursor-pointer ${
-                                  set.isDoubleVolume 
-                                    ? 'bg-lime-400 text-black border-lime-400 font-extrabold shadow-sm' 
-                                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-white'
-                                }`}
-                              >
-                                {set.isDoubleVolume ? '2X FACTOR ON' : '1X NORMAL'}
-                              </button>
-                            </div>
                           </>
                         )}
 
                         {/* Delete row */}
-                        <div className="col-span-1 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => removeDraftSet(index)}
-                            disabled={draftSets.length <= 1}
-                            className={`p-2 rounded-sm transition-all cursor-pointer ${
-                              draftSets.length <= 1 
-                                ? 'text-zinc-800 cursor-not-allowed' 
-                                : 'text-zinc-500 hover:text-red-400 hover:bg-zinc-950'
-                            }`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDraftSet(index)}
+                          disabled={draftSets.length <= 1}
+                          className={`p-1 transition-all shrink-0 cursor-pointer ${
+                            draftSets.length <= 1 
+                              ? 'text-zinc-800 cursor-not-allowed' 
+                              : 'text-zinc-500 hover:text-red-400'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1905,74 +1938,6 @@ export default function App() {
           </div>
 
         </div>
-
-        {/* SYSTEM SPECIFICATION: PRD ACCORDION AT BOTTOM */}
-        {showDocumentation && (
-          <section id="system_doc_accordion" className="bg-zinc-900 border-l-4 border-lime-400 p-6 shadow-xl transition-all duration-300 mt-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-lime-400" />
-                <h2 className="font-display text-lg font-black uppercase tracking-widest text-white">
-                  Data Architecture & PRD Plan Spec
-                </h2>
-              </div>
-              <button 
-                onClick={() => setShowDocumentation(false)}
-                className="text-[10px] uppercase tracking-widest font-bold bg-zinc-800 text-zinc-300 px-3 py-1.5 hover:bg-lime-400 hover:text-black transition cursor-pointer"
-              >
-                Collapse Info
-              </button>
-            </div>
-            
-            <div className="p-1 grid grid-cols-1 md:grid-cols-2 gap-8 text-sm pt-6">
-              <div className="space-y-3">
-                <h3 className="font-display font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span className="text-lime-400">01 //</span> Client-Side Data Architecture
-                </h3>
-                <p className="text-zinc-400 leading-relaxed text-xs">
-                  The application is engineered on a decoupled, type-safe schema leveraging React state and durable <code className="text-mono text-lime-400 bg-zinc-950 px-1.5 py-0.5 rounded font-bold font-mono">localStorage</code> persistence, fully eliminating server-side vulnerability for personal gym logs.
-                </p>
-                <ul className="space-y-1.5 text-xs text-zinc-400 pl-4 list-disc font-mono">
-                  <li><strong>Schema:</strong> Modeled within a relational array <code className="text-lime-400">DailyLog[]</code> using <code className="text-lime-400">YYYY-MM-DD</code> strings as index.</li>
-                  <li><strong>Modularity:</strong> Features isolated sub-nodes for each exercise session containing names, muscle targeting, and set metrics.</li>
-                  <li><strong>Volume tracking:</strong> Aggregated calculations of Workout intensity mapped across chronological ranges.</li>
-                </ul>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="font-display font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <span className="text-lime-400">02 //</span> Product Requirements (PRD) Goals
-                </h3>
-                <p className="text-zinc-400 leading-relaxed text-xs">
-                  This tracker removes analytical friction for gym beginners, prioritizing simple, streamlined steps that maximize physical consistency loop compliance.
-                </p>
-                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                  <div className="p-3 bg-zinc-950 border border-zinc-800">
-                    <span className="text-lime-400 block font-bold mb-1 uppercase tracking-wide">Streamlined Log</span>
-                    <p className="text-zinc-500 text-[11px] leading-relaxed">Fast suggestion prompts and dropdown entries bypass manual keyboard friction.</p>
-                  </div>
-                  <div className="p-3 bg-zinc-950 border border-zinc-800">
-                    <span className="text-white block font-bold mb-1 uppercase tracking-wide">Visual Metrics</span>
-                    <p className="text-zinc-500 text-[11px] leading-relaxed">Direct mapping of muscle volume calculations and progressive overload curves of target lift types.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Collapsed documentation prompt */}
-        {!showDocumentation && (
-          <div className="flex justify-start mt-8">
-            <button 
-              onClick={() => setShowDocumentation(true)}
-              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-lime-400 bg-zinc-900 border border-zinc-800 px-4 py-2 hover:border-lime-400 transition cursor-pointer"
-            >
-              <Info className="w-3.5 h-3.5" />
-              <span>Show System Spec & PRD</span>
-            </button>
-          </div>
-        )}
 
         {/* Footer Decorative */}
         <footer className="mt-8 flex flex-col sm:flex-row justify-between items-center text-[10px] text-zinc-650 font-mono border-t border-zinc-900 pt-6 gap-2">
